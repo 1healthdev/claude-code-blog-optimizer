@@ -1,0 +1,91 @@
+# =============================================================================
+# Agent Behavior Preferences — Blog Automation Project
+# =============================================================================
+# These settings govern how the agent behaves within this workspace.
+# NOT for secrets — use .env for API keys and credentials.
+# =============================================================================
+
+# --- Antigravity / Agent Runtime Settings ---
+agent:
+  # Controls whether terminal commands auto-execute or require user review.
+  # "request_review" is recommended until the project is mature and trusted.
+  terminal_command_execution: request_review
+
+  # Controls when the agent generates Artifacts (plans, screenshots, task lists).
+  # "agent_decides" lets the agent produce artifacts freely; user reviews before
+  # any external action (deploy, push, publish).
+  artifact_review_policy: agent_decides
+
+  # Controls whether JavaScript runs automatically in the agent browser.
+  # "request_review" prevents injected or unexpected JS from executing silently.
+  javascript_execution_in_browser: request_review
+
+  # Whether the agent should maintain and respect a browser allowlist.
+  # Allowlist lives at: ~/.gemini/antigravity/browserAllowlist.txt
+  enforce_browser_allowlist: true
+
+# --- Workspace Security ---
+security:
+  # All file operations (create, modify, delete) must stay within workspace root.
+  workspace_jail: true
+
+  # Files outside .tmp/ require explicit user confirmation before deletion.
+  delete_requires_confirmation_outside_tmp: true
+
+  # Never use force flags (-f, --force) on delete operations unless user says so.
+  allow_force_delete: false
+
+  # Never log or echo secrets (API keys, tokens) to stdout or artifacts.
+  mask_secrets_in_output: true
+
+# --- Execution Layer (Layer 3) ---
+execution:
+  # Base directory for shared Python scripts.
+  scripts_dir: execution/
+
+  # Base directory for intermediate processing files.
+  tmp_dir: .tmp/
+
+  # Path to the .env file (relative to workspace root).
+  env_file: .env
+
+  # Default Python interpreter to use for execution scripts.
+  python_interpreter: python
+
+  # Whether to auto-install requirements when a script fails with ImportError.
+  # Set to false to avoid silent environment changes.
+  auto_install_requirements: false
+
+# --- Skills Layer (Layer 1) ---
+skills:
+  # Base directory for workspace-scoped skills.
+  workspace_skills_dir: .agent/skills/
+
+  # Whether skills can be overwritten without user confirmation.
+  # false = always ask before modifying an existing skill.
+  allow_skill_overwrite_without_confirmation: false
+
+  # Whether the agent should update skill references/ when it learns something new.
+  # true = self-annealing is enabled (recommended).
+  self_anneal_skills: true
+
+# --- Artifacts ---
+artifacts:
+  # Preferred artifact types for communicating completed work to the user.
+  preferred_types:
+    - task_list
+    - implementation_plan
+    - screenshot
+    - diff_summary
+
+  # Whether to always include a diff summary when modifying existing files.
+  always_diff_on_modify: true
+
+# --- Logging ---
+logging:
+  # Logging verbosity: DEBUG | INFO | WARNING | ERROR
+  level: INFO
+
+  # Whether to write logs to a file in .tmp/ for debugging.
+  write_to_file: false
+  log_file: .tmp/agent.log
