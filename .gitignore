@@ -2,6 +2,7 @@
 .env
 credentials.json
 token.json
+token_docs.json
 
 # Intermediate processing files — always regenerated
 .tmp/
@@ -35,6 +36,9 @@ desktop.ini
 *.swp
 *.swo
 *~
+
+# Claude Code session state (local only)
+.claude/
 
 # Logs
 *.log
