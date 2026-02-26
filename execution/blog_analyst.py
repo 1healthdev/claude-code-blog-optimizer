@@ -102,7 +102,12 @@ def _load_knowledge_files(knowledge_dir: Path) -> str:
 class BlogAnalyst:
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.client = anthropic.Anthropic(api_key=cfg.anthropic_api_key)
+        # 3-minute read timeout — blog_analyst outputs ~2K tokens so should be fast,
+        # but a generous timeout prevents silent hangs on slow API days.
+        self.client = anthropic.Anthropic(
+            api_key=cfg.anthropic_api_key,
+            timeout=anthropic.Timeout(connect=15.0, read=180.0, write=15.0, pool=15.0),
+        )
         self._knowledge_cache: str | None = None
 
     def _get_knowledge(self) -> str:

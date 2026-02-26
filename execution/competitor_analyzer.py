@@ -109,7 +109,11 @@ class CompetitorAnalyzer:
     """Scrape top competitor pages and produce a structured competitor analysis."""
 
     def __init__(self, cfg: Config):
-        self.client = anthropic.Anthropic(api_key=cfg.anthropic_api_key)
+        # 2-minute read timeout — competitor analysis outputs ~1.5K tokens.
+        self.client = anthropic.Anthropic(
+            api_key=cfg.anthropic_api_key,
+            timeout=anthropic.Timeout(connect=15.0, read=120.0, write=15.0, pool=15.0),
+        )
         # Optional ScrapeOwl support — set SCRAPEOWL_API_KEY in .env to enable.
         self._scrapeowl_key: str | None = getattr(cfg, "scrapeowl_api_key", None) or None
 

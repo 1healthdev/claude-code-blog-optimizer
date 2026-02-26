@@ -56,7 +56,14 @@ def _load_generation_prompt() -> str:
 class ContentGenerator:
     def __init__(self, cfg: Config):
         self.cfg = cfg
-        self.client = anthropic.Anthropic(api_key=cfg.anthropic_api_key)
+        # 10-minute read timeout — content_generator requests up to 64K output tokens.
+        # Without a timeout the call can hang indefinitely if the API is slow.
+        # anthropic.APITimeoutError is raised on timeout; pipeline.py catches it and
+        # marks the row Error so the next post can proceed.
+        self.client = anthropic.Anthropic(
+            api_key=cfg.anthropic_api_key,
+            timeout=anthropic.Timeout(connect=15.0, read=600.0, write=15.0, pool=15.0),
+        )
         self._prompt_cache: str | None = None
 
     def _get_prompt(self) -> str:
