@@ -250,6 +250,13 @@ def start_run():
             return jsonify({"error": "A run is already in progress."}), 409
         data = request.get_json(force=True, silent=True) or {}
         limit = data.get("limit") or None
+        if limit is not None:
+            try:
+                limit = int(limit)
+                if limit < 0:
+                    return jsonify({"error": "limit must be a positive integer"}), 400
+            except (ValueError, TypeError):
+                return jsonify({"error": "limit must be an integer"}), 400
         _is_running = True
         while not _log_queue.empty():
             try:
