@@ -1,18 +1,22 @@
 """
 Blog Optimization Pipeline — Replit Dashboard
 Flask web UI to trigger and monitor pipeline.py runs.
+Password-protected via DASHBOARD_PASSWORD environment variable.
 """
-
+import functools
 import os
 import queue
+import secrets
 import subprocess
 import sys
 import threading
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, jsonify, request, session, redirect, url_for
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SESSION_SECRET", secrets.token_hex(32))
+DASHBOARD_PASSWORD = os.environ.get("DASHBOARD_PASSWORD", "")
 
 # ── State ─────────────────────────────────────────────────────────────────────
 _run_lock = threading.Lock()
@@ -22,6 +26,17 @@ _log_queue: queue.Queue = queue.Queue()
 
 WORKSPACE_ROOT = Path(__file__).parent
 PIPELINE_CMD = [sys.executable, str(WORKSPACE_ROOT / "execution" / "pipeline.py")]
+
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+def login_required(f):
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("authenticated"):
+            return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
 
 
 # ── Queue stats helper ────────────────────────────────────────────────────────
@@ -86,7 +101,50 @@ def _run_pipeline(limit):
 
 # ── Routes ────────────────────────────────────────────────────────────────────
 
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = ""
+    if request.method == "POST":
+        password = request.form.get("password", "")
+        if password == DASHBOARD_PASSWORD:
+            session["authenticated"] = True
+            return redirect(url_for("index"))
+        error = "Incorrect password"
+    return f"""<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login — Blog Pipeline</title>
+<style>
+  body{{font-family:system-ui,sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f5f5f5;margin:0}}
+  .login-box{{background:#fff;border-radius:12px;padding:40px;box-shadow:0 2px 12px rgba(0,0,0,.1);width:340px;text-align:center}}
+  h1{{font-size:1.3rem;margin-bottom:6px}}
+  .subtitle{{color:#666;font-size:.8rem;margin-bottom:24px}}
+  input[type=password]{{width:100%;padding:12px;border:1px solid #ddd;border-radius:6px;font-size:.95rem;margin-bottom:12px;box-sizing:border-box}}
+  input[type=password]:focus{{outline:none;border-color:#3b5bdb}}
+  button{{width:100%;padding:12px;border:none;border-radius:6px;background:#3b5bdb;color:#fff;font-size:.95rem;cursor:pointer;font-weight:600}}
+  button:hover{{background:#2f4ac0}}
+  .error{{color:#e74c3c;font-size:.85rem;margin-bottom:12px}}
+</style></head><body>
+<div class="login-box">
+  <h1>Blog Pipeline</h1>
+  <div class="subtitle">Dr. Mitra — SEO Dashboard</div>
+  {'<div class="error">' + error + '</div>' if error else ''}
+  <form method="POST">
+    <input type="password" name="password" placeholder="Enter password" autofocus>
+    <button type="submit">Log In</button>
+  </form>
+</div>
+</body></html>"""
+
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
 @app.route("/")
+@login_required
 def index():
     stats = _get_queue_stats()
     status_label = "Running" if _is_running else "Idle"
@@ -109,10 +167,18 @@ def index():
   button:hover{{background:#2f4ac0}}
   #stopBtn{{background:#e03131;display:none}}
   #stopBtn:hover{{background:#c92a2a}}
+  .logout{{background:#888;font-size:.8rem;padding:6px 14px}}
+  .logout:hover{{background:#666}}
+  .top-bar{{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}}
   #log{{background:#1a1a2e;color:#a9dc76;font-family:monospace;font-size:.78rem;padding:14px;border-radius:8px;height:340px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}}
 </style></head><body>
-<h1>Blog Pipeline — Dr. Mitra</h1>
-<div class="subtitle">SEO optimization queue dashboard</div>
+<div class="top-bar">
+  <div>
+    <h1>Blog Pipeline — Dr. Mitra</h1>
+    <div class="subtitle">SEO optimization queue dashboard</div>
+  </div>
+  <button class="logout" onclick="location.href='/logout'">Log Out</button>
+</div>
 <div class="cards">
   <div class="card"><div class="num">{stats.get('Pending','?')}</div><div class="label">Pending</div></div>
   <div class="card"><div class="num">{stats.get('Done','?')}</div><div class="label">Done</div></div>
@@ -176,6 +242,7 @@ function stopRun(){{
 
 
 @app.route("/run", methods=["POST"])
+@login_required
 def start_run():
     global _is_running
     with _run_lock:
@@ -195,6 +262,7 @@ def start_run():
 
 
 @app.route("/stream")
+@login_required
 def stream():
     def generate():
         while True:
@@ -211,6 +279,7 @@ def stream():
 
 
 @app.route("/stop", methods=["POST"])
+@login_required
 def stop_run():
     """Terminate the currently running pipeline subprocess."""
     global _proc
@@ -229,5 +298,5 @@ def stop_run():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False, threaded=True)
