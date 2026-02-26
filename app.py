@@ -78,9 +78,10 @@ def _run_pipeline(limit):
 
     _log_queue.put(f"[dashboard] Starting: {' '.join(cmd)}\n")
     try:
-        # nosec B603 — list-form Popen with shell=False (default); `limit` already
+        # nosemgrep: python.lang.security.audit.subprocess-injection
+        # List-form Popen with shell=False (default); `limit` already
         # validated as a positive int at the /run route boundary before reaching here.
-        proc = subprocess.Popen(  # nosec B603
+        proc = subprocess.Popen(  # nosemgrep
             cmd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
