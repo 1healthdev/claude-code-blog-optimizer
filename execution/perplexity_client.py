@@ -21,23 +21,24 @@ PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
 
 # Blueprint 2H — System role
 SYSTEM_ROLE = (
-    "You are an expert Healthcare SEO Research Assistant. "
-    "Conduct thorough research for medical content topics with attention to E-E-A-T signals. "
-    "Provide output in JSON format."
+    "You are a medical research assistant supporting a specialist surgeon in Abu Dhabi. "
+    "Your role is to research health topics thoroughly and provide structured, evidence-based findings "
+    "to help create accurate patient education content. Always respond in JSON format."
 )
 
 # Blueprint 2H — User prompt structure (JSON request object)
 # NOTE: Literal JSON braces are escaped as {{ and }} so Python's .format() doesn't
 # treat them as format placeholders. Only {post_title} and {target_keyword} are real.
 USER_PROMPT_TEMPLATE = """{{
-  "topic": "{post_title}",
-  "target_keyword": "{target_keyword}",
-  "research_requirements": {{
-    "competitor_synopses": "Analyze the top 5 ranking pages for this keyword. For each: title, key topics covered, estimated word count, content strengths, content weaknesses, and E-E-A-T signals used.",
-    "evidence_sources": "List authoritative sources (medical journals, clinical guidelines, professional medical societies) cited by top-ranking content. Include URLs where available.",
-    "content_gaps": "Identify specific subtopics, questions, or angles that top-ranking content does NOT cover well. Prioritize UAE/Abu Dhabi patient context and specialist-level clinical detail.",
-    "ai_citation_assessment": "What specific factual claims, statistics, or clinical guidance about this topic would AI systems (Google AI Overviews, ChatGPT, Perplexity) most likely extract and cite? What structural or content factors make a passage citation-worthy?",
-    "claims_needing_sources": "List 5-8 specific factual claims about this topic that require authoritative citations to be credible. Include recommended source types for each claim."
+  "research_topic": "{post_title}",
+  "primary_keyword": "{target_keyword}",
+  "research_questions": {{
+    "medical_overview": "Provide a comprehensive medical overview of this topic. What does current clinical evidence say? Include key statistics, timeframes, and patient outcomes from medical literature.",
+    "patient_questions": "What are the most common questions and misconceptions patients have about this topic? What do patients frequently misunderstand that a specialist surgeon should clarify?",
+    "clinical_evidence": "List the most authoritative medical sources (peer-reviewed journals, clinical guidelines, medical societies) covering this topic. Include URLs where available.",
+    "uae_context": "What specific considerations apply to patients in the UAE and Abu Dhabi? Include relevant cultural, dietary, religious (Ramadan if applicable), and regional health factors.",
+    "specialist_insights": "What specialist-level clinical details are typically missing from general patient education materials on this topic? What would a laparoscopic surgeon or gastroenterologist emphasise that general sources overlook?",
+    "citable_facts": "List 5-8 specific, verifiable medical facts and statistics about this topic that are well-supported by clinical evidence. For each, note the type of source that supports it."
   }}
 }}"""
 
