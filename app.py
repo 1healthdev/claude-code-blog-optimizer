@@ -17,6 +17,7 @@ app = Flask(__name__)
 # ── State ─────────────────────────────────────────────────────────────────────
 _run_lock = threading.Lock()
 _is_running = False
+_proc: subprocess.Popen | None = None   # currently running pipeline subprocess
 _log_queue: queue.Queue = queue.Queue()
 
 WORKSPACE_ROOT = Path(__file__).parent
@@ -55,7 +56,7 @@ def _get_queue_stats() -> dict:
 # ── Background runner ─────────────────────────────────────────────────────────
 
 def _run_pipeline(limit):
-    global _is_running
+    global _is_running, _proc
     cmd = PIPELINE_CMD.copy()
     if limit:
         cmd += ["--limit", str(limit)]
@@ -70,6 +71,7 @@ def _run_pipeline(limit):
             cwd=str(WORKSPACE_ROOT),
             bufsize=1,
         )
+        _proc = proc          # expose to /stop endpoint
         for line in proc.stdout:
             _log_queue.put(line)
         proc.wait()
@@ -78,6 +80,7 @@ def _run_pipeline(limit):
         _log_queue.put(f"[dashboard] ERROR launching pipeline: {e}\n")
     finally:
         _is_running = False
+        _proc = None
         _log_queue.put(None)  # sentinel — signals SSE stream to close
 
 
@@ -104,6 +107,8 @@ def index():
   .buttons{{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}}
   button{{padding:10px 18px;border:none;border-radius:6px;background:#3b5bdb;color:#fff;font-size:.9rem;cursor:pointer;font-weight:600}}
   button:hover{{background:#2f4ac0}}
+  #stopBtn{{background:#e03131;display:none}}
+  #stopBtn:hover{{background:#c92a2a}}
   #log{{background:#1a1a2e;color:#a9dc76;font-family:monospace;font-size:.78rem;padding:14px;border-radius:8px;height:340px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}}
 </style></head><body>
 <h1>Blog Pipeline — Dr. Mitra</h1>
@@ -120,20 +125,49 @@ def index():
   <button onclick="run(5)">Run 5</button>
   <button onclick="run(10)">Run 10</button>
   <button onclick="run(0)">Run All Pending</button>
+  <button id="stopBtn" onclick="stopRun()">⛔ Stop Run</button>
 </div>
 <div id="log">Logs will appear here when a run starts...</div>
 <script>
 const logEl=document.getElementById("log");
+const stopBtn=document.getElementById("stopBtn");
 let es=null;
+let isRunning={'true' if _is_running else 'false'};
+
+function setRunning(v){{
+  isRunning=v;
+  stopBtn.style.display=v?"inline-block":"none";
+}}
+setRunning(isRunning);
+
 function run(n){{
   fetch("/run",{{method:"POST",headers:{{"Content-Type":"application/json"}},body:JSON.stringify({{limit:n||null}})}})
   .then(r=>r.json()).then(d=>{{
     if(d.error){{logEl.textContent="ERROR: "+d.error;return;}}
     logEl.textContent="";
+    setRunning(true);
     if(es)es.close();
     es=new EventSource("/stream");
-    es.onmessage=e=>{{logEl.textContent+=e.data+"\\n";logEl.scrollTop=logEl.scrollHeight;}};
-    es.onerror=()=>{{es.close();es=null;}};
+    es.onmessage=e=>{{
+      logEl.textContent+=e.data+"\\n";
+      logEl.scrollTop=logEl.scrollHeight;
+      if(e.data.includes("[RUN COMPLETE]")||e.data.includes("[Stopped")||e.data.includes("Process exited")){{
+        setRunning(false);
+      }}
+    }};
+    es.onerror=()=>{{es.close();es=null;setRunning(false);}};
+  }});
+}}
+
+function stopRun(){{
+  if(!confirm("Stop the current run?\\n\\nThe active post will be marked as Error. You can re-run it by setting its Status back to Pending."))return;
+  fetch("/stop",{{method:"POST"}})
+  .then(r=>r.json()).then(d=>{{
+    if(d.error){{alert("Could not stop: "+d.error);return;}}
+    logEl.textContent+="\\n[Stopped by user]\\n";
+    logEl.scrollTop=logEl.scrollHeight;
+    setRunning(false);
+    if(es){{es.close();es=null;}}
   }});
 }}
 </script>
@@ -174,6 +208,24 @@ def stream():
                 yield "data: [waiting...]\n\n"
     return Response(generate(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.route("/stop", methods=["POST"])
+def stop_run():
+    """Terminate the currently running pipeline subprocess."""
+    global _proc
+    if not _is_running or _proc is None:
+        return jsonify({"error": "No run is currently in progress."}), 400
+    try:
+        _proc.terminate()   # SIGTERM — polite shutdown
+        # _run_pipeline's finally block handles cleanup (_is_running=False, None sentinel)
+        # when the process exits in response to SIGTERM.
+    except ProcessLookupError:
+        pass    # process already finished on its own
+    except Exception as e:
+        return jsonify({"error": f"Failed to stop process: {e}"}), 500
+    _log_queue.put("[dashboard] ⛔ Run stopped by user.\n")
+    return jsonify({"stopped": True})
 
 
 if __name__ == "__main__":
